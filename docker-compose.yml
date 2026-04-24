@@ -6,13 +6,21 @@ services:
       - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.endpoint=unix:///var/run/docker.sock
-      - --entrypoints.web.address=:80
       - --providers.docker.network=sec-ca2_frontend
+      - --providers.file.directory=/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.websecure.address=:443
     ports:
       - "80:80"
+      - "443:443"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/certs:/certs:ro
+      - ./traefik/dynamic:/dynamic:ro
     networks:
       - frontend
 
@@ -20,10 +28,11 @@ services:
     build: ./apps/webapp
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.webapp.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.webapp.entrypoints=web"
-      - "traefik.http.services.webapp.loadbalancer.server.port=5000"
       - "traefik.docker.network=sec-ca2_frontend"
+      - "traefik.http.routers.webapp.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.webapp.entrypoints=websecure"
+      - "traefik.http.routers.webapp.tls=true"
+      - "traefik.http.services.webapp.loadbalancer.server.port=5000"
     networks:
       - frontend
       - backend
