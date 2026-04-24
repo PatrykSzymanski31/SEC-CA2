@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install flask requests
+RUN pip install flask requests authlib
 
 COPY app.py /app/app.py
 

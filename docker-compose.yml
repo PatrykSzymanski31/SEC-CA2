@@ -26,6 +26,12 @@ services:
 
   webapp:
     build: ./apps/webapp
+    environment:
+      FLASK_SECRET_KEY: super-secret-session-key
+      KEYCLOAK_BASE_URL: http://keycloak:8080/keycloak
+      KEYCLOAK_REALM: sec-ca2
+      KEYCLOAK_CLIENT_ID: webapp
+      KEYCLOAK_CLIENT_SECRET: NEED-ADD
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=sec-ca2_frontend"
@@ -40,6 +46,26 @@ services:
   internal-api:
     image: traefik/whoami
     networks:
+      - backend
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin123!
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=sec-ca2_frontend"
+      - "traefik.http.routers.keycloak.rule=PathPrefix(`/keycloak`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+    networks:
+      - frontend
       - backend
 
 networks:
