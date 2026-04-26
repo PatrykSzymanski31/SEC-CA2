@@ -3,21 +3,30 @@ from authlib.integrations.flask_client import OAuth
 from functools import wraps
 import os
 import requests
+import base64
+import json
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL")
+KEYCLOAK_INTERNAL_URL = os.getenv("KEYCLOAK_INTERNAL_URL")
+KEYCLOAK_EXTERNAL_URL = os.getenv("KEYCLOAK_EXTERNAL_URL")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID")
 KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET")
 
+AUTH_URL = f"{KEYCLOAK_EXTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/auth"
+TOKEN_URL = f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/token"
+USERINFO_URL = f"{KEYCLOAK_INTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/userinfo"
+LOGOUT_URL = f"{KEYCLOAK_EXTERNAL_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout"
+
 oauth = OAuth(app)
 oauth.register(
     name="keycloak",
-    server_metadata_url=f"{KEYCLOAK_BASE_URL}/realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
     client_id=KEYCLOAK_CLIENT_ID,
     client_secret=KEYCLOAK_CLIENT_SECRET,
+    authorize_url=AUTH_URL,
+    access_token_url=TOKEN_URL,
     client_kwargs={"scope": "openid profile email"},
 )
 
@@ -67,14 +76,47 @@ def login():
 
 @app.route("/auth/callback")
 def auth_callback():
-    token = oauth.keycloak.authorize_access_token()
-    userinfo = token.get("userinfo") or {}
+    code = request.args.get("code")
+    if not code:
+        return "<h1>Error</h1><p>Missing authorization code.</p>", 400
 
-    realm_access = token.get("userinfo", {}).get("realm_access", {})
-    if not realm_access:
-        realm_access = token.get("realm_access", {})
+    redirect_uri = url_for("auth_callback", _external=True, _scheme="https")
 
-    roles = realm_access.get("roles", [])
+    token_response = requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": KEYCLOAK_CLIENT_ID,
+            "client_secret": KEYCLOAK_CLIENT_SECRET,
+        },
+        timeout=10,
+    )
+    token_response.raise_for_status()
+    token = token_response.json()
+
+    userinfo_response = requests.get(
+        USERINFO_URL,
+        headers={"Authorization": f"Bearer {token['access_token']}"},
+        timeout=10,
+    )
+    userinfo_response.raise_for_status()
+    userinfo = userinfo_response.json()
+
+    access_token = token.get("access_token", "")
+    roles = []
+
+    if access_token:
+        try:
+            parts = access_token.split(".")
+            if len(parts) == 3:
+                payload = parts[1]
+                payload += "=" * (-len(payload) % 4)
+                decoded = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+                roles = decoded.get("realm_access", {}).get("roles", [])
+        except Exception:
+           roles = []
 
     session["user"] = {
         "preferred_username": userinfo.get("preferred_username", "unknown"),
@@ -86,11 +128,7 @@ def auth_callback():
 @app.route("/logout")
 def logout():
     session.clear()
-    logout_redirect = url_for("home", _external=True, _scheme="https")
-    return redirect(
-        f"{KEYCLOAK_BASE_URL}/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout"
-        f"?post_logout_redirect_uri={logout_redirect}"
-    )
+    return redirect(f"https://127.0.0.1:8443/keycloak/realms/{KEYCLOAK_REALM}/protocol/openid-connect/logout")
 
 @app.route("/backend")
 @login_required
@@ -108,3 +146,4 @@ def admin():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
