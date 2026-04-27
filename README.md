@@ -105,6 +105,39 @@ OWASP ZAP baseline scan outputs are stored in:
 security/zap/
 ```
 
+## Scripts
+
+The project includes helper scripts in the `scripts/` directory for setup, verification, backup, and restore tasks.
+
+### Setup Script
+
+To build and start the full environment, run:
+
+```bash
+./scripts/setup.sh
+```
+## Verification Script
+
+To check that the main services are running and reachable, run:
+
+```
+./scripts/verify.sh
+```
+
+## Backup Script
+
+To create a backup of the project configuration, security artefacts, and Docker volumes, run:
+
+```
+./scripts/backup.sh
+```
+
+## Restore Script
+
+```
+./scripts/restore.sh backups/backupfolder
+```
+
 ## Stopping the Solution
 
 To stop the running containers, use:
