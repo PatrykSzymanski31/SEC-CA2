@@ -17,6 +17,7 @@ From the host machine terminal, connect to the Ubuntu VM using:
 
 ```bash
 ssh -p 2222 vboxuser@127.0.0.1
+```
 
 
 ## Begin
