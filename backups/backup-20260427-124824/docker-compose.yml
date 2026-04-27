@@ -1,0 +1,110 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+      - --providers.docker.network=sec-ca2_frontend
+      - --providers.file.directory=/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.websecure.address=:443
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/certs:/certs:ro
+      - ./traefik/dynamic:/dynamic:ro
+    networks:
+      - frontend
+
+  webapp:
+    depends_on:
+      - keycloak
+    build: ./apps/webapp
+    environment:
+      FLASK_SECRET_KEY: super-secret-session-key
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/keycloak
+      KEYCLOAK_EXTERNAL_URL: https://127.0.0.1:8443/keycloak
+      KEYCLOAK_REALM: sec-ca2
+      KEYCLOAK_CLIENT_ID: webapp
+      KEYCLOAK_CLIENT_SECRET: cSVNJ4sGLOXyH8DDnG7wO8Yy1wYDy5Pa
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=sec-ca2_frontend"
+      - "traefik.http.routers.webapp.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.webapp.entrypoints=websecure"
+      - "traefik.http.routers.webapp.tls=true"
+      - "traefik.http.services.webapp.loadbalancer.server.port=5000"
+    networks:
+      - frontend
+      - backend
+
+  internal-api:
+    image: traefik/whoami
+    networks:
+      - backend
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6.1
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin123!
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /keycloak
+      KC_HOSTNAME: https://127.0.0.1:8443/keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=sec-ca2_frontend"
+      - "traefik.http.routers.keycloak.rule=PathPrefix(`/keycloak`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - frontend
+      - backend
+
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "9999:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - frontend
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    ports:
+      - "3000:3000"
+    networks:
+      - frontend
+
+networks:
+  frontend:
+  backend:
+volumes:
+  keycloak_data:
