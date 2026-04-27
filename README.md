@@ -25,16 +25,19 @@ Move into the project folder
 
 ```bash
 cd ~/SEC-CA2
+```
 
 To build and start the environment, run:
 
 ```bash
 docker compose up -d --build
+```
 
 To confirm that all services are running:
 
 ```bash
 docker compose ps
+```
 
 ## Access the services
 
@@ -94,11 +97,13 @@ Trivy image scan outputs are stored in:
 
 ```text
 security/trivy/
+```
 
 OWASP ZAP baseline scan outputs are stored in:
 
 ```text
 security/zap/
+```
 
 ## Stopping the Solution
 
@@ -106,6 +111,7 @@ To stop the running containers, use:
 
 ```bash
 docker compose down
+```
 
 Do not use "docker compose down -v" unless you intentionally want to remove persisted volumes.
 
@@ -116,11 +122,13 @@ If the containers are not running correctly, use the following commands to inspe
 ```bash
 docker compose ps
 docker compose logs
+```
 
 To restart the environment, run:
 
 ```bash
 docker compose up -d
+```
 
 If Keycloak is slow to start, wait for it to finish booting before attempting login through the main application.
 
